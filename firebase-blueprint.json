@@ -1,0 +1,234 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil operacional do entregador ou gestor no Rota Express.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "role": { "type": "string", "enum": ["driver", "fleet_manager", "organization_admin", "platform_admin"] },
+        "organizationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "city": { "type": "string", "maxLength": 80 },
+        "state": { "type": "string", "maxLength": 10 },
+        "preferredNavigator": { "type": "string", "enum": ["google_maps", "waze"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "role", "organizationId", "createdAt"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Estrutura multi-tenant para operação individual ou transportadora.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 120 },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "plan": { "type": "string", "enum": ["free", "professional", "premium", "enterprise"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId", "plan", "createdAt"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Veículo configurado com parâmetros de consumo, capacidade e custos.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "organizationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 80 },
+        "type": { "type": "string", "enum": ["motorcycle", "car", "utility", "van", "truck"] },
+        "fuelType": { "type": "string", "maxLength": 30 },
+        "consumptionKmPerLiter": { "type": "number" },
+        "fuelPricePerLiter": { "type": "number" },
+        "maintenanceCostPerKm": { "type": "number" },
+        "hourlyCost": { "type": "number" },
+        "maxWeightKg": { "type": "number" },
+        "maxPackages": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "organizationId", "name", "type", "consumptionKmPerLiter", "createdAt"]
+    },
+    "ImportTemplate": {
+      "title": "ImportTemplate",
+      "description": "Modelo salvo de mapeamento de colunas identificado por assinatura estrutural.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "organizationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "platform": { "type": "string", "maxLength": 60 },
+        "structureSignature": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "organizationId", "platform", "structureSignature", "createdAt"]
+    },
+    "RouteRecord": {
+      "title": "RouteRecord",
+      "description": "Rota operacional planejada, ativa ou concluída.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "organizationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["draft", "planned", "active", "finished", "cancelled"] },
+        "activeVersion": { "type": "integer" },
+        "selectedStrategy": { "type": "string", "enum": ["fastest", "economic", "balanced", "time_window", "original"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "organizationId", "name", "status", "activeVersion", "createdAt"]
+    },
+    "PackageRecord": {
+      "title": "PackageRecord",
+      "description": "Pacote rastreável importado com endereço original, normalizado, coordenadas e posição física.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "organizationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "routeId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "trackingCode": { "type": "string", "maxLength": 100 },
+        "platform": { "type": "string", "maxLength": 60 },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "loaded", "in_transit", "delivered", "failed_attempt", "postponed", "return_required", "returned", "cancelled"]
+        },
+        "physicalLocationId": { "type": "string", "maxLength": 60 },
+        "locationConfidence": { "type": "string", "enum": ["confirmed", "high", "medium", "low"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "organizationId", "trackingCode", "status", "createdAt"]
+    },
+    "DeliveryEvent": {
+      "title": "DeliveryEvent",
+      "description": "Evento auditável imutável de transição de status de entrega.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "routeId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "packageId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventType": { "type": "string", "maxLength": 50 },
+        "newStatus": { "type": "string", "maxLength": 40 },
+        "reason": { "type": "string", "maxLength": 200 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "routeId", "packageId", "eventType", "newStatus", "createdAt"]
+    },
+    "FinancialEntry": {
+      "title": "FinancialEntry",
+      "description": "Lançamento de receita ou despesa operacional por rota ou entregador.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "routeId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["revenue", "expense"] },
+        "category": { "type": "string", "maxLength": 60 },
+        "amount": { "type": "number" },
+        "isEstimated": { "type": "boolean" },
+        "date": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "type", "category", "amount", "isEstimated", "date", "createdAt"]
+    },
+    "FavoriteAddress": {
+      "title": "FavoriteAddress",
+      "description": "Endereço favorito de partida, centro de distribuição ou encerramento.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 80 },
+        "address": { "type": "string", "maxLength": 300 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "address", "createdAt"]
+    },
+    "RouteStop": {
+      "title": "RouteStop",
+      "description": "Parada física agrupada vinculada a uma versão de rota.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "routeId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "routeVersion": { "type": "integer" },
+        "sequence": { "type": "integer" },
+        "address": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "partial", "failed", "postponed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "routeId", "routeVersion", "sequence", "status", "createdAt"]
+    },
+    "ApiUsageRecord": {
+      "title": "ApiUsageRecord",
+      "description": "Registro de consumo e custo estimado de APIs externas.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "provider": { "type": "string", "maxLength": 60 },
+        "operation": { "type": "string", "maxLength": 80 },
+        "billingUnits": { "type": "integer" },
+        "estimatedCost": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "provider", "operation", "billingUnits", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Dados privados do entregador/usuário isolados ao próprio titular."
+    },
+    "/organizations/{orgId}": {
+      "schema": { "$ref": "#/entities/Organization" },
+      "description": "Organizações multi-tenant (individual ou transportadora)."
+    },
+    "/vehicles/{vehicleId}": {
+      "schema": { "$ref": "#/entities/Vehicle" },
+      "description": "Veículos e parâmetros operacionais do usuário."
+    },
+    "/import_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/ImportTemplate" },
+      "description": "Templates aprendidos de mapeamento de planilhas."
+    },
+    "/routes/{routeId}": {
+      "schema": { "$ref": "#/entities/RouteRecord" },
+      "description": "Rotas planejadas, ativas e encerradas do usuário."
+    },
+    "/route_stops/{stopId}": {
+      "schema": { "$ref": "#/entities/RouteStop" },
+      "description": "Paradas físicas agrupadas de cada versão de rota."
+    },
+    "/packages/{packageId}": {
+      "schema": { "$ref": "#/entities/PackageRecord" },
+      "description": "Pacotes com status individual, endereço e posição física de carga."
+    },
+    "/delivery_events/{eventId}": {
+      "schema": { "$ref": "#/entities/DeliveryEvent" },
+      "description": "Trilha imutável de auditoria de entregas e tentativas frustradas."
+    },
+    "/financial_entries/{entryId}": {
+      "schema": { "$ref": "#/entities/FinancialEntry" },
+      "description": "Receitas e despesas reais ou estimadas."
+    },
+    "/favorite_addresses/{addressId}": {
+      "schema": { "$ref": "#/entities/FavoriteAddress" },
+      "description": "Endereços favoritos de origem e destino."
+    },
+    "/api_usage/{usageId}": {
+      "schema": { "$ref": "#/entities/ApiUsageRecord" },
+      "description": "Métricas de uso de APIs externas e controle de custos."
+    }
+  }
+}

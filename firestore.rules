@@ -1,0 +1,506 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global Hardened Primitives
+    // -------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isPlatformAdmin() {
+      return isVerified()
+        && request.auth.token.email == 'eduardokainan.senai@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Blueprints (Pillar 2: Anti-Update-Gap)
+    // -------------------------------------------------------------------------
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role', 'organizationId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'email', 'role', 'organizationId', 'city', 'state', 'preferredNavigator', 'createdAt', 'updatedAt'])
+        && data.id == uid
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.role in ['driver', 'fleet_manager', 'organization_admin', 'platform_admin']
+        && isValidId(data.organizationId)
+        && (!('city' in data) || (data.city is string && data.city.size() <= 80))
+        && (!('state' in data) || (data.state is string && data.state.size() <= 10))
+        && (!('preferredNavigator' in data) || (data.preferredNavigator in ['google_maps', 'waze']))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrganization(data) {
+      return data.keys().hasAll(['id', 'name', 'ownerId', 'plan', 'createdAt'])
+        && data.keys().hasOnly(['id', 'name', 'ownerId', 'plan', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.ownerId == request.auth.uid
+        && data.plan in ['free', 'professional', 'premium', 'enterprise']
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidVehicle(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'organizationId', 'name', 'type', 'consumptionKmPerLiter', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'organizationId', 'name', 'type', 'fuelType', 'consumptionKmPerLiter', 'fuelPricePerLiter', 'maintenanceCostPerKm', 'hourlyCost', 'maxWeightKg', 'maxPackages', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.ownerId == request.auth.uid
+        && isValidId(data.organizationId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && data.type in ['motorcycle', 'car', 'utility', 'van', 'truck']
+        && (!('fuelType' in data) || (data.fuelType is string && data.fuelType.size() <= 30))
+        && data.consumptionKmPerLiter is number && data.consumptionKmPerLiter > 0 && data.consumptionKmPerLiter <= 100
+        && (!('fuelPricePerLiter' in data) || (data.fuelPricePerLiter is number && data.fuelPricePerLiter >= 0 && data.fuelPricePerLiter <= 100))
+        && (!('maintenanceCostPerKm' in data) || (data.maintenanceCostPerKm is number && data.maintenanceCostPerKm >= 0 && data.maintenanceCostPerKm <= 100))
+        && (!('hourlyCost' in data) || (data.hourlyCost is number && data.hourlyCost >= 0 && data.hourlyCost <= 1000))
+        && (!('maxWeightKg' in data) || (data.maxWeightKg is number && data.maxWeightKg >= 0 && data.maxWeightKg <= 50000))
+        && (!('maxPackages' in data) || (data.maxPackages is int && data.maxPackages >= 1 && data.maxPackages <= 2000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidImportTemplate(data) {
+      return data.keys().hasAll(['id', 'userId', 'organizationId', 'platform', 'structureSignature', 'columnMapping', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'organizationId', 'platform', 'structureSignature', 'columnMapping', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && isValidId(data.organizationId)
+        && data.platform is string && data.platform.size() >= 1 && data.platform.size() <= 60
+        && data.structureSignature is string && data.structureSignature.size() >= 1 && data.structureSignature.size() <= 200
+        && data.columnMapping is map && data.columnMapping.size() <= 60
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidRoute(data) {
+      return data.keys().hasAll(['id', 'userId', 'organizationId', 'name', 'status', 'activeVersion', 'selectedStrategy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'organizationId', 'vehicleId', 'name', 'status', 'activeVersion', 'selectedStrategy', 'origin', 'destination', 'metrics', 'createdAt', 'updatedAt', 'startedAt', 'finishedAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && isValidId(data.organizationId)
+        && (!('vehicleId' in data) || isValidId(data.vehicleId))
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.status in ['draft', 'planned', 'active', 'finished', 'cancelled']
+        && data.activeVersion is int && data.activeVersion >= 1 && data.activeVersion <= 1000
+        && data.selectedStrategy in ['fastest', 'economic', 'balanced', 'time_window', 'original']
+        && (!('origin' in data) || (data.origin is map && data.origin.size() <= 10))
+        && (!('destination' in data) || (data.destination is map && data.destination.size() <= 10))
+        && (!('metrics' in data) || (data.metrics is map && data.metrics.size() <= 25))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (!('startedAt' in data) || data.startedAt is timestamp)
+        && (!('finishedAt' in data) || data.finishedAt is timestamp);
+    }
+
+    function isValidRouteStop(data) {
+      return data.keys().hasAll(['id', 'userId', 'routeId', 'routeVersion', 'sequence', 'address', 'status', 'packageIds', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'routeId', 'routeVersion', 'sequence', 'address', 'neighborhood', 'lat', 'lng', 'status', 'packageIds', 'serviceDurationSec', 'estimatedArrivalIso', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && isValidId(data.routeId)
+        && data.routeVersion is int && data.routeVersion >= 1 && data.routeVersion <= 1000
+        && data.sequence is int && data.sequence >= 1 && data.sequence <= 2000
+        && data.address is string && data.address.size() >= 1 && data.address.size() <= 300
+        && (!('neighborhood' in data) || (data.neighborhood is string && data.neighborhood.size() <= 100))
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180))
+        && data.status in ['pending', 'in_progress', 'completed', 'partial', 'failed', 'postponed']
+        && data.packageIds is list && data.packageIds.size() >= 1 && data.packageIds.size() <= 50 && data.packageIds[0] is string
+        && (!('serviceDurationSec' in data) || (data.serviceDurationSec is int && data.serviceDurationSec >= 0 && data.serviceDurationSec <= 86400))
+        && (!('estimatedArrivalIso' in data) || (data.estimatedArrivalIso is string && data.estimatedArrivalIso.size() <= 40))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPackage(data) {
+      return data.keys().hasAll(['id', 'userId', 'organizationId', 'trackingCode', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'organizationId', 'routeId', 'trackingCode', 'orderId', 'platform', 'recipientName', 'normalizedAddress', 'status', 'physicalLocationId', 'locationConfidence', 'lat', 'lng', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && isValidId(data.organizationId)
+        && (!('routeId' in data) || isValidId(data.routeId))
+        && data.trackingCode is string && data.trackingCode.size() >= 1 && data.trackingCode.size() <= 100
+        && (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100))
+        && (!('platform' in data) || (data.platform is string && data.platform.size() <= 60))
+        && (!('recipientName' in data) || (data.recipientName is string && data.recipientName.size() <= 140))
+        && (!('normalizedAddress' in data) || (data.normalizedAddress is string && data.normalizedAddress.size() <= 300))
+        && data.status in ['pending', 'loaded', 'in_transit', 'delivered', 'failed_attempt', 'postponed', 'return_required', 'returned', 'cancelled']
+        && (!('physicalLocationId' in data) || (data.physicalLocationId is string && data.physicalLocationId.size() <= 60))
+        && (!('locationConfidence' in data) || (data.locationConfidence in ['confirmed', 'high', 'medium', 'low']))
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDeliveryEvent(data) {
+      return data.keys().hasAll(['id', 'userId', 'routeId', 'packageId', 'eventType', 'newStatus', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'routeId', 'stopId', 'packageId', 'eventType', 'previousStatus', 'newStatus', 'reason', 'notes', 'createdAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && isValidId(data.routeId)
+        && (!('stopId' in data) || isValidId(data.stopId))
+        && isValidId(data.packageId)
+        && data.eventType is string && data.eventType.size() >= 1 && data.eventType.size() <= 50
+        && (!('previousStatus' in data) || (data.previousStatus is string && data.previousStatus.size() <= 40))
+        && data.newStatus is string && data.newStatus.size() >= 1 && data.newStatus.size() <= 40
+        && (!('reason' in data) || (data.reason is string && data.reason.size() <= 200))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFinancialEntry(data) {
+      return data.keys().hasAll(['id', 'userId', 'type', 'category', 'amount', 'isEstimated', 'date', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'routeId', 'type', 'category', 'description', 'amount', 'isEstimated', 'date', 'createdAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && (!('routeId' in data) || (data.routeId is string && data.routeId.size() <= 128))
+        && data.type in ['revenue', 'expense']
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 60
+        && (!('description' in data) || (data.description is string && data.description.size() <= 200))
+        && data.amount is number && data.amount >= 0 && data.amount <= 1000000
+        && data.isEstimated is bool
+        && data.date is string && data.date.size() >= 8 && data.date.size() <= 30
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFavoriteAddress(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'address', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'name', 'address', 'lat', 'lng', 'createdAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && data.address is string && data.address.size() >= 3 && data.address.size() <= 300
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidApiUsage(data) {
+      return data.keys().hasAll(['id', 'userId', 'provider', 'operation', 'billingUnits', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'organizationId', 'routeId', 'provider', 'operation', 'billingUnits', 'estimatedCost', 'createdAt'])
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && (!('organizationId' in data) || isValidId(data.organizationId))
+        && (!('routeId' in data) || isValidId(data.routeId))
+        && data.provider is string && data.provider.size() >= 1 && data.provider.size() <= 60
+        && data.operation is string && data.operation.size() >= 1 && data.operation.size() <= 80
+        && data.billingUnits is int && data.billingUnits >= 0 && data.billingUnits <= 100000
+        && (!('estimatedCost' in data) || (data.estimatedCost is number && data.estimatedCost >= 0 && data.estimatedCost <= 10000))
+        && data.createdAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    // Startup connection check document
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+
+    // Users (PII isolated strictly to owner or platform admin)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isPlatformAdmin());
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().role == 'driver'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isPlatformAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().organizationId == existing().organizationId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'city', 'state', 'preferredNavigator', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(userId) && (isOwner(userId) || isPlatformAdmin());
+    }
+
+    // Organizations
+    match /organizations/{orgId} {
+      allow get: if isSignedIn() && isValidId(orgId) && (existing().ownerId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(orgId)
+        && isValidOrganization(incoming())
+        && incoming().id == orgId
+        && incoming().plan == 'free'
+        && incoming().createdAt == request.time;
+      allow update: if isVerified()
+        && isValidId(orgId)
+        && isValidOrganization(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().ownerId == request.auth.uid
+            && incoming().plan == existing().plan
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(orgId) && (existing().ownerId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Vehicles
+    match /vehicles/{vehicleId} {
+      allow get: if isSignedIn() && isValidId(vehicleId) && (existing().ownerId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(vehicleId)
+        && isValidVehicle(incoming())
+        && incoming().id == vehicleId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(vehicleId)
+        && isValidVehicle(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().organizationId == existing().organizationId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().ownerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'type', 'fuelType', 'consumptionKmPerLiter', 'fuelPricePerLiter',
+              'maintenanceCostPerKm', 'hourlyCost', 'maxWeightKg', 'maxPackages', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isVerified() && isValidId(vehicleId) && (existing().ownerId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Import Templates
+    match /import_templates/{templateId} {
+      allow get: if isSignedIn() && isValidId(templateId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(templateId)
+        && isValidImportTemplate(incoming())
+        && incoming().id == templateId
+        && incoming().createdAt == request.time;
+      allow update: if isVerified()
+        && isValidId(templateId)
+        && isValidImportTemplate(incoming())
+        && incoming().userId == existing().userId
+        && incoming().organizationId == existing().organizationId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['platform', 'columnMapping', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(templateId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Routes (Terminal state locking once finished/cancelled)
+    match /routes/{routeId} {
+      allow get: if isSignedIn() && isValidId(routeId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(routeId)
+        && isValidRoute(incoming())
+        && incoming().id == routeId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(routeId)
+        && isValidRoute(incoming())
+        && incoming().userId == existing().userId
+        && incoming().organizationId == existing().organizationId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && !(existing().status in ['finished', 'cancelled'])
+            && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'vehicleId', 'selectedStrategy', 'activeVersion', 'origin', 'destination', 'metrics', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'startedAt', 'finishedAt', 'metrics', 'updatedAt'])
+            )
+          )
+        );
+      allow delete: if isVerified() && isValidId(routeId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Route Stops
+    match /route_stops/{stopId} {
+      allow get: if isSignedIn() && isValidId(stopId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(stopId)
+        && isValidRouteStop(incoming())
+        && incoming().id == stopId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(stopId)
+        && isValidRouteStop(incoming())
+        && incoming().userId == existing().userId
+        && incoming().routeId == existing().routeId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['sequence', 'routeVersion', 'estimatedArrivalIso', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            )
+          )
+        );
+      allow delete: if isVerified() && isValidId(stopId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Packages
+    match /packages/{packageId} {
+      allow get: if isSignedIn() && isValidId(packageId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(packageId)
+        && isValidPackage(incoming())
+        && incoming().id == packageId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(packageId)
+        && isValidPackage(incoming())
+        && incoming().userId == existing().userId
+        && incoming().organizationId == existing().organizationId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['physicalLocationId', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['normalizedAddress', 'lat', 'lng', 'locationConfidence', 'updatedAt'])
+            )
+          )
+        );
+      allow delete: if isVerified() && isValidId(packageId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Delivery Events (Append-only immutable audit trail)
+    match /delivery_events/{eventId} {
+      allow get: if isSignedIn() && isValidId(eventId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(eventId)
+        && isValidDeliveryEvent(incoming())
+        && incoming().id == eventId
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Financial Entries
+    match /financial_entries/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(entryId)
+        && isValidFinancialEntry(incoming())
+        && incoming().id == entryId
+        && incoming().createdAt == request.time;
+      allow update: if isVerified()
+        && isValidId(entryId)
+        && isValidFinancialEntry(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['category', 'description', 'amount', 'isEstimated', 'date'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(entryId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // Favorite Addresses
+    match /favorite_addresses/{addressId} {
+      allow get: if isSignedIn() && isValidId(addressId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(addressId)
+        && isValidFavoriteAddress(incoming())
+        && incoming().id == addressId
+        && incoming().createdAt == request.time;
+      allow update: if isVerified()
+        && isValidId(addressId)
+        && isValidFavoriteAddress(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isPlatformAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'address', 'lat', 'lng'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(addressId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+    }
+
+    // API Usage (Append-only metering records)
+    match /api_usage/{usageId} {
+      allow get: if isSignedIn() && isValidId(usageId) && (existing().userId == request.auth.uid || isPlatformAdmin());
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(usageId)
+        && isValidApiUsage(incoming())
+        && incoming().id == usageId
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

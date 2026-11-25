@@ -1,0 +1,6 @@
+{
+  "name": "Rota Express",
+  "description": "Plataforma inteligente de roteirização, planejamento, organização de carga, execução de entregas e gestão financeira para entregadores de última milha.",
+  "requestFramePermissions": ["camera", "geolocation", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
